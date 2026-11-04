@@ -166,3 +166,7 @@ pretrained
 outputs
 output
 checkpoints
+
+# local Claude Code config
+CLAUDE.md
+.mcp.json
