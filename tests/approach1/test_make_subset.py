@@ -49,3 +49,13 @@ def test_build_subset(tmp_path: Path) -> None:
     for v in ev.values():
         a, b = v["context"]
         assert b - a == 45 and all(a < t < b for t in v["target"])
+
+
+def test_build_subset_deterministic(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    _make_src(src)
+    outs = [tmp_path / "out1", tmp_path / "out2"]
+    for out in outs:
+        build_subset(src, "train", 5, 0, out)
+    texts = [(o / "evaluation_index.json").read_text() for o in outs]
+    assert texts[0] == texts[1]

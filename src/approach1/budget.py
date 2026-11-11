@@ -8,7 +8,7 @@ from ..model.types import Gaussians
 def budget_count(num_gaussians: int, k: float) -> int:
     if not 0.0 < k <= 1.0:
         raise ValueError(f"k must be in (0, 1], got {k}")
-    return max(1, math.floor(k * num_gaussians))
+    return max(1, math.floor(round(k * num_gaussians, 9)))
 
 
 def select_top_k_by_opacity(gaussians: Gaussians, k: float) -> Gaussians:

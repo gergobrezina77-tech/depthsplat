@@ -26,3 +26,6 @@ def test_config_loads(extra):
     load_typed_root_config(cfg)
     assert cfg.model.encoder.upsample_factor == 4
     assert cfg.data_loader.train.batch_size == 2
+    if not extra:  # default (bounded) view sampler composition
+        assert cfg.dataset.view_sampler.warm_up_steps == 0
+        assert cfg.dataset.view_sampler.max_distance_between_context_views == 135

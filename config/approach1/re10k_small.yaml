@@ -32,6 +32,8 @@ train:
 
 dataset:
   view_sampler:
+    # Overrides warm_up_steps 30000 from config/dataset/view_sampler_dataset_specific_config/bounded_re10k.yaml,
+    # so fine-tuning uses the full 45-135 context gap from step 0.
     warm_up_steps: 0
 
 wandb:
