@@ -81,7 +81,7 @@ Implementation plan (tickets A1-01 to A1-12, dependencies, commands):
 
 ## 8. Definition of Done
 
-- [ ] Overfit script runs on command with one command line, on 3-5 scenes. Loss falls and
+- [x] Overfit script runs on command with one command line, on 3-5 scenes. Loss falls and
       PSNR@`k=0.1` clearly improves over the frozen model on the same scenes.
 - [ ] Long-run script starts from the same config. TensorBoard shows all metrics in section 6.
 - [ ] Eval script prints a table (budget x {PSNR, SSIM, LPIPS, kept count}) for frozen and
@@ -89,6 +89,27 @@ Implementation plan (tickets A1-01 to A1-12, dependencies, commands):
 - [ ] Kept count equals `floor(k * R * I_size)` in every eval row.
 - [ ] Trainable param count and added runtime are reported.
 - [ ] No upstream files changed beyond minimal hooks.
+
+## Results: Overfit Run (Gate G1)
+
+`scripts/a1_overfit.sh`: 5 scenes (`re10k_overfit5`), 3000 steps, batch size 4 (peak ~9.4 GB).
+Trainable params: 56,351 / 38,346,416 (`gaussian_head` only). Frozen check: all 563 non-head
+tensors equal the pretrained checkpoint. Eval: `scripts/a1_eval.sh`, same 5 scenes and views.
+
+| k | Frozen PSNR | Fine-tuned PSNR | Δ dB | Frozen LPIPS | Fine-tuned LPIPS | Kept |
+|---|---|---|---|---|---|---|
+| 0.05 | 5.41 | 11.83 | +6.42 | 0.735 | 0.626 | 6553 |
+| 0.1 | 6.00 | 12.52 | +6.52 | 0.712 | 0.580 | 13107 |
+| 0.25 | 8.35 | 14.87 | +6.51 | 0.598 | 0.460 | 32768 |
+| 0.5 | 14.60 | 20.33 | +5.73 | 0.345 | 0.274 | 65536 |
+| 1.0 | 29.73 | 27.00 | -2.73 | 0.090 | 0.147 | 131072 |
+
+- Gate G1 passes: PSNR@0.1 is +6.5 dB over the frozen model (needed +1.0 dB). `loss/total`
+  falls ~19% (mean of the first vs. the last sixth of the run).
+- Cost: the full set loses 2.7 dB, because the prefix loss is ~20x the full loss at low k and
+  dominates the gradient.
+- Validation in this run is not informative: upstream `ValidationWrapper` draws 1 random scene
+  per check and its iterator ran out after 5 checks (no `val/*` points after step 999).
 
 ## 9. Open Risks
 

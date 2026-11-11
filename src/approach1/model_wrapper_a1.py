@@ -85,6 +85,7 @@ class ModelWrapperA1(ModelWrapper):
             )
         return total
 
+    @torch.no_grad()
     def _psnr(self, output, batch):
         return compute_psnr(
             rearrange(batch["target"]["image"], "b v c h w -> (b v) c h w"),
