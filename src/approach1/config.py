@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Literal
 
 from dacite import from_dict
 from omegaconf import DictConfig, OmegaConf
@@ -13,6 +14,8 @@ class Approach1Cfg:
     k_max: float = 1.0
     full_weight: float = 1.0
     prefix_weight: float = 1.0
+    # linear: w_f*L_full + w_p*L_prefix; log: w_f*log L_full + w_p*log L_prefix (scale-normalized).
+    loss_mode: Literal["linear", "log"] = "linear"
     eval_budgets: list[float] = field(
         default_factory=lambda: [0.05, 0.1, 0.25, 0.5, 1.0]
     )

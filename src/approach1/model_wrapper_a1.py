@@ -54,6 +54,11 @@ class ModelWrapperA1(ModelWrapper):
         # Lightning calls train() on the whole model each epoch; re-freeze norm/dropout state.
         set_frozen_eval(self, self.a1_cfg.trainable_prefixes)
 
+    def on_before_optimizer_step(self, optimizer) -> None:
+        # Lightning calls this before gradient clipping, so this is the unclipped norm.
+        grads = [p.grad for p in self.parameters() if p.grad is not None]
+        self.log("train/grad_norm", torch.linalg.vector_norm(torch.stack([g.norm() for g in grads])))
+
     def _encode(self, batch, scene_names=None):
         gaussians = self.encoder(
             batch["context"], self.global_step, False, scene_names=scene_names
@@ -108,7 +113,11 @@ class ModelWrapperA1(ModelWrapper):
         out_prefix = self._render(kept_gaussians, batch, depth_mode)
         loss_prefix = self._photo_loss(out_prefix, batch, kept_gaussians)
 
-        total = cfg.full_weight * loss_full + cfg.prefix_weight * loss_prefix
+        if cfg.loss_mode == "log":
+            # grad of log L = grad L / L: each term is normalized by its own scale.
+            total = cfg.full_weight * torch.log(loss_full) + cfg.prefix_weight * torch.log(loss_prefix)
+        else:
+            total = cfg.full_weight * loss_full + cfg.prefix_weight * loss_prefix
         self.log("loss/full", loss_full)
         self.log("loss/prefix", loss_prefix)
         self.log("loss/total", total)

@@ -6,6 +6,7 @@ approach1:
   k_max: 1.0
   full_weight: 1.0
   prefix_weight: 1.0
+  loss_mode: linear  # linear | log
   eval_budgets: [0.05, 0.1, 0.25, 0.5, 1.0]
   soft_mask: false
   soft_mask_temperature: 0.05

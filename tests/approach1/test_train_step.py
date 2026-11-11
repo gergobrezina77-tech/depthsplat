@@ -92,3 +92,23 @@ def test_validation_step_logs_budgets_and_image(built):
         del type(wrapper).logger
     assert {f"val/psnr@{k}" for k in a1_cfg.eval_budgets} <= logged.keys()
     assert len(images) == 1 and images[0][1][0].ndim == 3
+
+
+def test_log_loss_mode_and_grad_norm(built):
+    wrapper, data_module, a1_cfg = built
+    wrapper.cuda().train()
+    logged = {}
+    wrapper.log = lambda key, value, *a, **k: logged.__setitem__(key, value)
+    batch = next(iter(data_module.train_dataloader()))
+    batch = wrapper.transfer_batch_to_device(batch, torch.device("cuda"), 0)
+    wrapper.zero_grad()
+    a1_cfg.loss_mode = "log"
+    try:
+        loss = wrapper.training_step(batch, 0)
+    finally:
+        a1_cfg.loss_mode = "linear"
+    expected = torch.log(logged["loss/full"]) + torch.log(logged["loss/prefix"])
+    assert torch.allclose(loss, expected)
+    loss.backward()
+    wrapper.on_before_optimizer_step(None)
+    assert torch.isfinite(logged["train/grad_norm"]) and logged["train/grad_norm"] > 0
