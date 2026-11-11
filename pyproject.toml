@@ -45,3 +45,9 @@ priority = "explicit"
 [tool.poetry.dependencies]
 torch = { source = "pytorch-cu124" }
 torchvision = { source = "pytorch-cu124" }
+
+[dependency-groups]
+dev = [
+    "tensorboard (<2.21)",
+    "pytest (>=9.2.0,<10.0.0)"
+]
