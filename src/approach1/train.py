@@ -51,6 +51,7 @@ def train(cfg_dict: DictConfig) -> None:
         val_check_interval=cfg.trainer.val_check_interval,
         check_val_every_n_epoch=None,  # int interval counts global steps
         enable_progress_bar=True,
+        log_every_n_steps=10,  # Lightning default 50 hides train curves on short runs
         gradient_clip_val=cfg.trainer.gradient_clip_val,
         max_steps=cfg.trainer.max_steps,
         num_sanity_val_steps=cfg.trainer.num_sanity_val_steps,
