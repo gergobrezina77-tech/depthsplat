@@ -1,0 +1,40 @@
+# @package _global_
+
+approach1:
+  trainable_prefixes: ["encoder.gaussian_head."]
+  k_min: 0.01
+  k_max: 1.0
+  full_weight: 1.0
+  prefix_weight: 1.0
+  eval_budgets: [0.05, 0.1, 0.25, 0.5, 1.0]
+  soft_mask: false
+  soft_mask_temperature: 0.05
+
+model:
+  encoder:
+    upsample_factor: 4
+    lowest_feature_resolution: 4
+    supervise_intermediate_depth: false
+
+checkpointing:
+  pretrained_model: /mnt/hdd/depthsplat/pretrained/depthsplat-gs-small-re10k-256x256-view2-cfeab6b1.pth
+
+optimizer:
+  lr: 1.e-4
+
+data_loader:
+  train:
+    batch_size: 2  # 14 (re10k default) does not fit an 11 GB GPU
+
+train:
+  no_viz_video: true
+  eval_model_every_n_val: 0
+
+dataset:
+  view_sampler:
+    warm_up_steps: 0
+
+wandb:
+  mode: disabled
+
+output_dir: outputs/approach1/default
