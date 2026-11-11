@@ -3,14 +3,18 @@ import time
 from pathlib import Path
 
 import torch
+from einops import rearrange
 from tabulate import tabulate
 
 from ..dataset.types import BatchedExample
 from ..evaluation.metrics import compute_lpips, compute_psnr, compute_ssim
 from ..global_cfg import get_cfg
+from ..misc.image_io import prep_image
 from ..model.model_wrapper import ModelWrapper
+from ..visualization.layout import add_border, hcat
 from .budget import budget_count, select_top_k_by_opacity
 from .config import Approach1Cfg
+from .freeze import set_frozen_eval
 
 
 class ModelWrapperA1(ModelWrapper):
@@ -45,6 +49,125 @@ class ModelWrapperA1(ModelWrapper):
         self.a1_warm = False
         # k -> list of per-scene dicts (psnr, ssim, lpips, kept, n_total, select_render_time).
         self.a1_rows: dict[float, list[dict]] = {}
+
+    def on_train_epoch_start(self) -> None:
+        # Lightning calls train() on the whole model each epoch; re-freeze norm/dropout state.
+        set_frozen_eval(self, self.a1_cfg.trainable_prefixes)
+
+    def _encode(self, batch, scene_names=None):
+        gaussians = self.encoder(
+            batch["context"], self.global_step, False, scene_names=scene_names
+        )
+        return gaussians["gaussians"] if isinstance(gaussians, dict) else gaussians
+
+    def _render(self, gaussians, batch, depth_mode=None):
+        _, _, _, h, w = batch["target"]["image"].shape
+        return self.decoder.forward(
+            gaussians,
+            batch["target"]["extrinsics"],
+            batch["target"]["intrinsics"],
+            batch["target"]["near"],
+            batch["target"]["far"],
+            (h, w),
+            depth_mode=depth_mode,
+        )
+
+    def _photo_loss(self, output, batch, gaussians):
+        # Sum of upstream photometric losses (mse, lpips), as in upstream training_step.
+        total = 0
+        for loss_fn in self.losses:
+            kwargs = {"valid_depth_mask": None}
+            if loss_fn.name == "mse":
+                kwargs["l1_loss"] = self.train_cfg.l1_loss
+                kwargs["clamp_large_error"] = self.train_cfg.train_ignore_large_loss
+            total = total + loss_fn.forward(
+                output, batch, gaussians, self.global_step, **kwargs
+            )
+        return total
+
+    def _psnr(self, output, batch):
+        return compute_psnr(
+            rearrange(batch["target"]["image"], "b v c h w -> (b v) c h w"),
+            rearrange(output.color, "b v c h w -> (b v) c h w"),
+        ).mean()
+
+    def training_step(self, batch, batch_idx):
+        batch: BatchedExample = self.data_shim(batch)
+        cfg = self.a1_cfg
+        gaussians = self._encode(batch, scene_names=batch["scene"])
+        n_total = gaussians.opacities.shape[1]
+
+        depth_mode = self.train_cfg.depth_mode
+        out_full = self._render(gaussians, batch, depth_mode)
+        loss_full = self._photo_loss(out_full, batch, gaussians)
+
+        # One continuous k per step; the prefix is the global top-N_k by opacity.
+        k = cfg.k_min + (cfg.k_max - cfg.k_min) * torch.rand(()).item()
+        kept_gaussians = select_top_k_by_opacity(gaussians, k)
+        out_prefix = self._render(kept_gaussians, batch, depth_mode)
+        loss_prefix = self._photo_loss(out_prefix, batch, kept_gaussians)
+
+        total = cfg.full_weight * loss_full + cfg.prefix_weight * loss_prefix
+        self.log("loss/full", loss_full)
+        self.log("loss/prefix", loss_prefix)
+        self.log("loss/total", total)
+        self.log("train/psnr_full", self._psnr(out_full, batch))
+        self.log("train/psnr_prefix", self._psnr(out_prefix, batch))
+        self.log("train/k", k)
+        self.log("train/kept", float(kept_gaussians.opacities.shape[1]))
+        self.log("info/global_step", self.global_step)  # hack for ckpt monitor
+
+        if self.global_rank == 0 and self.global_step % self.train_cfg.print_log_every_n_steps == 0:
+            print(
+                f"train step {self.global_step}; scene = {[x[:20] for x in batch['scene']]}; "
+                f"k = {k:.3f} ({kept_gaussians.opacities.shape[1]}/{n_total}); loss = {total:.6f}"
+            )
+        # Tell the data loader processes about the current step.
+        if self.step_tracker is not None:
+            self.step_tracker.set_step(self.global_step)
+        return total
+
+    def validation_step(self, batch, batch_idx):
+        batch: BatchedExample = self.data_shim(batch)
+        assert batch["target"]["image"].shape[0] == 1
+        gaussians = self._encode(batch)
+        rgb_gt = batch["target"]["image"][0]
+
+        budgets = self.a1_cfg.eval_budgets
+        renders = {}
+        for k in budgets:
+            rgb = self._render(select_top_k_by_opacity(gaussians, k), batch).color[0]
+            renders[k] = rgb
+            self.log(f"val/psnr@{k}", compute_psnr(rgb_gt, rgb).mean())
+
+        # First target view: GT | k=1 | smallest k.
+        k_small = min(budgets)
+        k_full = self._render(gaussians, batch).color[0] if 1.0 not in renders else renders[1.0]
+        grid = hcat(rgb_gt[0], k_full[0], renders[k_small][0])
+        self.logger.log_image(
+            "comparison", [prep_image(add_border(grid))], step=self.global_step,
+            caption=batch["scene"],
+        )
+
+    def configure_optimizers(self):
+        params = [p for p in self.parameters() if p.requires_grad]
+        optimizer = torch.optim.AdamW(
+            params,
+            lr=self.optimizer_cfg.lr,
+            weight_decay=self.optimizer_cfg.weight_decay,
+        )
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            self.optimizer_cfg.lr,
+            self.trainer.max_steps + 10,
+            pct_start=0.01,
+            cycle_momentum=False,
+            anneal_strategy="cos",
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {"scheduler": scheduler, "interval": "step", "frequency": 1},
+        }
 
     def test_step(self, batch, batch_idx):
         """Budget eval. Upstream save_image/save_gaussian/save_depth (rejected),
