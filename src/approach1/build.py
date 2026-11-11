@@ -1,3 +1,5 @@
+import warnings
+
 import torch
 from omegaconf import DictConfig
 
@@ -39,4 +41,6 @@ def build_wrapper(
             state = state["state_dict"]
         wrapper.load_state_dict(state, strict=True)
         print(f"Loaded pretrained weights: {cfg.checkpointing.pretrained_model}")
+    else:
+        warnings.warn("checkpointing.pretrained_model is null: no weights loaded")
     return wrapper, data_module, cfg, a1_cfg

@@ -12,6 +12,8 @@ from .build import build_wrapper
 
 @hydra.main(version_base=None, config_path="../../config", config_name="main")
 def evaluate(cfg_dict: DictConfig) -> None:
+    if cfg_dict.checkpointing.pretrained_model is None:
+        raise ValueError("evaluate needs checkpointing.pretrained_model (else random init)")
     set_cfg(cfg_dict)
     Path(cfg_dict.output_dir).mkdir(parents=True, exist_ok=True)
     torch.manual_seed(cfg_dict.seed)

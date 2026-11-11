@@ -26,7 +26,9 @@ def test_eval_budget_table(tmp_path):
         check=True,
         cwd=Path(__file__).parents[2],
     )
-    table = json.loads((out / "metrics" / "budget_table.json").read_text())
+    data = json.loads((out / "metrics" / "budget_table.json").read_text())
+    assert len(data["scenes"]) == 5
+    table = data["rows"]
     assert len(table) == 2
     assert [r["kept"] for r in table] == [13107, 131072]
     assert all(r["scenes"] == 5 for r in table)
