@@ -92,9 +92,10 @@ Implementation plan (tickets A1-01 to A1-12, dependencies, commands):
 
 ## Results: Overfit Run (Gate G1)
 
+Full write-up: [experiments/2026-11-11-a1-overfit5-linear.md](experiments/2026-11-11-a1-overfit5-linear.md).
 `scripts/a1_overfit.sh`: 5 scenes (`re10k_overfit5`), 3000 steps, batch size 4 (peak ~9.4 GB).
 Trainable params: 56,351 / 38,346,416 (`gaussian_head` only). Frozen check: all 563 non-head
-tensors equal the pretrained checkpoint. Eval: `scripts/a1_eval.sh`, same 5 scenes and views.
+tensors equal the pretrained checkpoint (4 of 567 tensors changed, all head). Eval: `scripts/a1_eval.sh`, same 5 scenes and views.
 
 | k | Frozen PSNR | Fine-tuned PSNR | Δ dB | Frozen LPIPS | Fine-tuned LPIPS | Kept |
 |---|---|---|---|---|---|---|
