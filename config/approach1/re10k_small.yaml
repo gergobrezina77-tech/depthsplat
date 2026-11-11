@@ -26,6 +26,9 @@ data_loader:
   train:
     batch_size: 2  # 14 (re10k default) does not fit an 11 GB GPU
 
+trainer:
+  val_check_interval: 250  # int = global steps (train.py sets check_val_every_n_epoch=None)
+
 train:
   no_viz_video: true
   eval_model_every_n_val: 0
