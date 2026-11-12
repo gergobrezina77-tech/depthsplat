@@ -1,5 +1,4 @@
 import json
-import time
 from pathlib import Path
 
 import torch
@@ -23,11 +22,8 @@ def budget_test_step(wrapper, batch) -> None:
         if not wrapper.a2_warm:  # untimed warm-up, once per process
             wrapper.scores(batch)
             wrapper.a2_warm = True
-        torch.cuda.synchronize()
-        start = time.time()
-        gaussians, s = wrapper.scores(batch)
-        torch.cuda.synchronize()
-        head_time = time.time() - start
+        timings: dict = {}
+        gaussians, s = wrapper.scores(batch, timings)
 
         b, g = s.shape
         method_scores = {
@@ -58,7 +54,8 @@ def budget_test_step(wrapper, batch) -> None:
                         "lpips": compute_lpips(rgb_gt, rgb).mean().item(),
                         "kept": kept,
                         "n_total": g,
-                        "head_time": head_time,
+                        "head_time": timings["head_time"],
+                        "encode_time": timings["encode_time"],
                     }
                 )
 
@@ -78,7 +75,10 @@ def write_budget_tables(wrapper, out_dir: Path) -> list[dict]:
                 "kept": rows[0]["kept"],
                 "n_total": rows[0]["n_total"],
                 "scenes": n,
+                # head_time: score head only (added runtime); encode_time: DepthSplat encoder.
+                # Both are per scene, identical across methods/budgets (scored once per scene).
                 "head_time": sum(r["head_time"] for r in rows) / n,
+                "encode_time": sum(r["encode_time"] for r in rows) / n,
             }
         )
         per_scene += [{"method": method, "k": k, **r} for r in rows]
