@@ -1,0 +1,53 @@
+import pytest
+import torch
+
+from src.approach2.select import gumbel_topk_mask, random_scores, select_top_k
+from src.model.types import Gaussians
+
+
+def test_gumbel_mask_exact_budget_per_scene():
+    s = torch.randn(2, 1000, requires_grad=True)
+    m, m_hard = gumbel_topk_mask(s, 0.1, 1.0)
+    assert m_hard.sum(1).tolist() == [100, 100]
+    assert torch.equal(m, m_hard.float())
+
+
+def test_gumbel_mask_grad_reaches_scores():
+    s = torch.randn(1, 1000, requires_grad=True)
+    m, _ = gumbel_topk_mask(s, 0.1, 1.0)
+    (m * torch.randn(1, 1000)).sum().backward()
+    assert torch.isfinite(s.grad).all() and (s.grad != 0).any()
+
+
+@pytest.mark.parametrize("k, expected", [(1e-6, 1), (1.0, 1000)])
+def test_gumbel_mask_extreme_budgets(k, expected):
+    s = torch.randn(1, 1000, requires_grad=True)
+    m, m_hard = gumbel_topk_mask(s, k, 1.0)
+    m.sum().backward()
+    assert int(m_hard.sum()) == expected and torch.isfinite(s.grad).all()
+
+
+def test_select_top_k_per_scene():
+    b, g = 2, 1000
+    means = torch.zeros(b, g, 3)
+    means[..., 0] = torch.arange(g).float()
+    gaussians = Gaussians(
+        means=means,
+        covariances=torch.zeros(b, g, 3, 3),
+        harmonics=torch.zeros(b, g, 3, 4),
+        opacities=torch.rand(b, g),
+    )
+    scores = torch.zeros(b, g)
+    scores[0, :10] = 1.0
+    scores[1, 990:] = 1.0
+    kept = select_top_k(gaussians, scores, 0.01)
+    assert kept.opacities.shape == (2, 10)
+    assert kept.means.shape == (2, 10, 3)
+    assert kept.covariances.shape == (2, 10, 3, 3)
+    assert kept.harmonics.shape == (2, 10, 3, 4)
+    assert set(kept.means[0, :, 0].long().tolist()) == set(range(10))
+    assert set(kept.means[1, :, 0].long().tolist()) == set(range(990, 1000))
+
+
+def test_random_scores_seeded():
+    assert torch.equal(random_scores(1, 50, 0, "cpu"), random_scores(1, 50, 0, "cpu"))
