@@ -1,0 +1,47 @@
+# @package _global_
+
+approach2:
+  k_min: 0.01
+  k_max: 1.0
+  temperature: 1.0
+  head_channels: [32, 64, 96, 128]
+  eval_budgets: [0.05, 0.1, 0.25, 0.5, 1.0]
+  eval_methods: [score, random, opacity]
+  head_ckpt: null
+  val_root: /mnt/hdd/depthsplat/datasets/re10k_heldout10
+  val_index_path: assets/evaluation_index_a2_val10.json
+
+model:
+  encoder:
+    upsample_factor: 4
+    lowest_feature_resolution: 4
+    supervise_intermediate_depth: false
+    return_depth: true
+
+checkpointing:
+  pretrained_model: /mnt/hdd/depthsplat/pretrained/depthsplat-gs-small-re10k-256x256-view2-cfeab6b1.pth
+
+optimizer:
+  lr: 3.e-4
+
+data_loader:
+  train:
+    batch_size: 2  # 14 (re10k default) does not fit an 11 GB GPU
+
+trainer:
+  val_check_interval: 250  # int = global steps (train.py sets check_val_every_n_epoch=None)
+
+train:
+  no_viz_video: true
+  eval_model_every_n_val: 0
+
+dataset:
+  view_sampler:
+    # Overrides warm_up_steps 30000 from config/dataset/view_sampler_dataset_specific_config/bounded_re10k.yaml,
+    # so fine-tuning uses the full 45-135 context gap from step 0.
+    warm_up_steps: 0
+
+wandb:
+  mode: disabled
+
+output_dir: outputs/approach2/default
