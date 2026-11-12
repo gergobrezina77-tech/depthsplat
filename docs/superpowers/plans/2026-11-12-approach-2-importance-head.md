@@ -72,7 +72,7 @@ Defined once here; the owning ticket implements them, every other ticket uses th
 
 ---
 
-### A2-01: Mask rasterizer install
+### Task 1 (A2-01): Mask rasterizer install
 
 **Files:** Create `scripts/install_mask_rasterizer.sh`, `src/approach2/__init__.py`
 
@@ -94,7 +94,7 @@ git commit -m "build(approach2): add mask rasterizer install script"
 
 ---
 
-### A2-02: Config group
+### Task 2 (A2-02): Config group
 
 **Files:** Create `config/approach2/re10k_small.yaml`, `src/approach2/config.py`; Test `tests/approach2/test_config.py`
 
@@ -129,7 +129,7 @@ git commit -m "feat(approach2): add config group"
 
 ---
 
-### A2-03: Score head
+### Task 3 (A2-03): Score head
 
 **Files:** Create `src/approach2/score_head.py`; Test `tests/approach2/test_score_head.py`
 
@@ -165,7 +165,7 @@ git commit -m "feat(approach2): add U-Net score head"
 
 ---
 
-### A2-04: Selection
+### Task 4 (A2-04): Selection
 
 **Files:** Create `src/approach2/select.py`; Test `tests/approach2/test_select.py`
 
@@ -233,7 +233,7 @@ git commit -m "feat(approach2): add Gumbel top-k mask and score selection"
 
 ---
 
-### A2-05: Head input features
+### Task 5 (A2-05): Head input features
 
 **Files:** Create `src/approach2/features.py`; Test `tests/approach2/test_features.py`
 
@@ -274,7 +274,7 @@ git commit -m "feat(approach2): add head input hook and score ordering"
 
 ---
 
-### A2-06: Validation index and loader
+### Task 6 (A2-06): Validation index and loader
 
 **Files:** Create `assets/evaluation_index_a2_val10.json`, `src/approach2/val_data.py`; Test `tests/approach2/test_val_data.py`
 
@@ -312,7 +312,7 @@ git commit -m "feat(approach2): add fixed validation set with upstream views"
 
 ---
 
-### A2-07: Masked render
+### Task 7 (A2-07): Masked render
 
 **Files:** Create `src/approach2/mask_render.py`; Test `tests/approach2/test_mask_render.py`
 
@@ -354,7 +354,7 @@ git commit -m "feat(approach2): add masked render with mask rasterizer"
 
 ---
 
-### A2-08: Wrapper skeleton and builder
+### Task 8 (A2-08): Wrapper skeleton and builder
 
 **Files:** Create `src/approach2/build.py`, `src/approach2/model_wrapper_a2.py`; Test `tests/approach2/test_wrapper.py`
 
@@ -413,7 +413,7 @@ git commit -m "feat(approach2): add wrapper skeleton and builder"
 
 ---
 
-### A2-09: Masked training step
+### Task 9 (A2-09): Masked training step
 
 **Files:** Create `src/approach2/training.py`; Test `tests/approach2/test_training.py`
 
@@ -447,7 +447,7 @@ git commit -m "feat(approach2): add masked training step"
 
 ---
 
-### A2-10: Budget eval
+### Task 10 (A2-10): Budget eval
 
 **Files:** Create `src/approach2/evaluation.py`, `src/approach2/evaluate.py`, `scripts/a2_eval.sh`; Test `tests/approach2/test_eval_smoke.py`
 
@@ -481,7 +481,7 @@ git commit -m "feat(approach2): add budget eval with score, random and opacity c
 
 ---
 
-### A2-11: Validation step
+### Task 11 (A2-11): Validation step
 
 **Files:** Create `src/approach2/validation.py`; Test `tests/approach2/test_validation.py`
 
@@ -514,7 +514,7 @@ git commit -m "feat(approach2): add budget validation step"
 
 ---
 
-### A2-12: Train entry
+### Task 12 (A2-12): Train entry
 
 **Files:** Create `src/approach2/train.py`, `scripts/a2_overfit.sh`; Test `tests/approach2/test_train_smoke.py`
 
@@ -544,7 +544,7 @@ git commit -m "feat(approach2): add train entry and overfit script"
 
 ---
 
-### A2-13: Memory probe, overfit run, results
+### Task 13 (A2-13): Memory probe, overfit run, results
 
 **Files:** Modify `scripts/a2_overfit.sh` (batch size, header comment); Create `docs/experiments/2026-11-12-a2-overfit5.md`
 
@@ -576,7 +576,7 @@ git commit -m "docs(approach2): add overfit5 results"
 
 ---
 
-### A2-14: Full RE10K training (needs user go-ahead)
+### Task 14 (A2-14): Full RE10K training (needs user go-ahead)
 
 **Files:** Create `scripts/a2_train.sh`, `docs/experiments/<date>-a2-re10k-full.md`
 
