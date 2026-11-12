@@ -1,0 +1,42 @@
+diff --git a/cuda_rasterizer/backward.cu b/cuda_rasterizer/backward.cu
+index ad33f19..5ead1ba 100644
+--- a/cuda_rasterizer/backward.cu
++++ b/cuda_rasterizer/backward.cu
+@@ -456,6 +456,7 @@ renderCUDA(
+ 			dL_dpixel[i] = dL_dpixels[i * H * W + pix_id];
+ 
+ 	float last_alpha = 0;
++	float last_mask = 0;
+ 	float last_color[C] = { 0 };
+ 
+ 	// Gradient of pixel coordinate w.r.t. normalized 
+@@ -518,7 +519,7 @@ renderCUDA(
+ 			{
+ 				const float c = collected_colors[ch * BLOCK_SIZE + j];
+ 				// Update last color (to be used in the next iteration)
+-				accum_rec[ch] = mask * last_alpha * last_color[ch] + (1.f - mask * last_alpha) * accum_rec[ch];
++				accum_rec[ch] = last_mask * last_alpha * last_color[ch] + (1.f - last_mask * last_alpha) * accum_rec[ch];
+ 				last_color[ch] = c;
+ 
+ 				const float dL_dchannel = dL_dpixel[ch];
+@@ -533,6 +534,7 @@ renderCUDA(
+ 			dL_dmask *= alpha * T;
+ 			// Update last alpha (to be used in the next iteration)
+ 			last_alpha = alpha;
++			last_mask = mask;
+ 
+ 			// Account for fact that alpha also influences how much of
+ 			// the background color is added if nothing left to blend
+diff --git a/mask_diff_gaussian_rasterization/__init__.py b/mask_diff_gaussian_rasterization/__init__.py
+index 2c1f712..74748ef 100644
+--- a/mask_diff_gaussian_rasterization/__init__.py
++++ b/mask_diff_gaussian_rasterization/__init__.py
+@@ -14,6 +14,8 @@ import torch.nn as nn
+ import torch
+ from . import _C
+ 
++__a2_patched__ = True
++
+ def cpu_deep_copy_tuple(input_tuple):
+     copied_tensors = [item.cpu().clone() if isinstance(item, torch.Tensor) else item for item in input_tuple]
+     return tuple(copied_tensors)
