@@ -98,3 +98,43 @@ def test_render_masked_shape():
     }
     masks = torch.ones(1, G, device=DEV)
     assert render_masked(decoder, gaussians, masks, target).shape == (1, 2, 3, H, W)
+
+
+def test_mask_grad_matches_finite_differences():
+    # Regression for the upstream backward bug (current mask used with previous alpha).
+    g = torch.Generator(device=DEV).manual_seed(1)
+    n = 200
+    means = torch.rand(n, 3, device=DEV, generator=g)
+    means[:, :2] = means[:, :2] - 0.5
+    means[:, 2] = 2 + 2 * means[:, 2]
+    cov = (0.1**2) * torch.eye(3, device=DEV).expand(n, 3, 3).contiguous()
+    sh = 0.5 * torch.randn(n, 3, 4, device=DEV, generator=g)
+    opa = 0.3 + 0.6 * torch.rand(n, device=DEV, generator=g)
+    m0 = torch.rand(1, n, device=DEV, generator=g) * 0.8 + 0.2
+    m0[torch.rand(1, n, device=DEV, generator=g) < 0.25] = 0.0
+    weights = torch.randn(1, 1, 3, H, W, device=DEV, generator=g)
+
+    def loss_fn(m):
+        img = _render(render_cuda_masked, means, cov, sh, opa, gaussian_masks=m)
+        return (img * weights).sum()
+
+    m = m0.clone().requires_grad_(True)
+    loss_fn(m).backward()
+    analytic = m.grad[0]
+
+    eps = 1e-2
+    idx = torch.nonzero(analytic.abs() > 1e-6).flatten()
+    assert len(idx) >= 30
+    idx = idx[torch.randperm(len(idx), generator=torch.Generator().manual_seed(0))[:30]].to(DEV)
+    assert (m0[0, idx] == 0).any() and (m0[0, idx] > 0).any()
+    fd = []
+    with torch.no_grad():
+        for i in idx.tolist():
+            mp, mm = m0.clone(), m0.clone()
+            mp[0, i] += eps
+            mm[0, i] -= eps
+            fd.append((loss_fn(mp) - loss_fn(mm)) / (2 * eps))
+    fd = torch.stack(fd)
+    a = analytic[idx]
+    rel = (a - fd).norm() / fd.norm()
+    assert rel < 2e-2, f"relative error {rel.item():.3f}"

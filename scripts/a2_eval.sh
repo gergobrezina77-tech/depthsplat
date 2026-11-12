@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# Budget eval of an Approach 2 checkpoint (frozen model by default).
+# Budget eval of an Approach 2 head checkpoint. HEAD_CKPT is required for the 'score' method;
+# without it pass approach2.eval_methods=[random,opacity] (evaluate.py raises otherwise).
 # Usage: scripts/a2_eval.sh [head_ckpt] [data_root] [index_json] [output_dir]
 HEAD_CKPT=${1:-${HEAD_CKPT:-}}
 ROOT=${2:-${ROOT:-/mnt/hdd/depthsplat/datasets/re10k_overfit5}}

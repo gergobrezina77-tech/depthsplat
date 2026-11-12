@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import torch
@@ -47,17 +48,31 @@ class ModelWrapperA2(ModelWrapperA1):
         self.a2_warm = False
         self.strict_loading = False  # head-only checkpoints lack the frozen DepthSplat keys
 
-    def scores(self, batch):
+    def scores(self, batch, timings: dict | None = None):
         # batch is already shimmed. DepthSplat runs without grad; only the head gets gradients.
+        # If `timings` is given, fills "encode_time" (encoder) and "head_time" (head only:
+        # head input + score head + reordering), both CUDA-synchronized.
+        def tick():
+            if timings is not None:
+                torch.cuda.synchronize()
+            return time.time()
+
         with torch.no_grad():
+            t0 = tick()
             out = self.encoder(
                 batch["context"], self.global_step, False, scene_names=batch.get("scene")
             )
             gaussians, depths = out["gaussians"], out["depths"]
+            t1 = tick()
             head_in = build_head_input(self.head_hook.pop(), depths)
         b, v = depths.shape[:2]
         s = self.score_head(head_in)
-        return gaussians, scores_to_gaussian_order(s, b, v)
+        s = scores_to_gaussian_order(s, b, v)
+        if timings is not None:
+            t2 = tick()
+            timings["encode_time"] = t1 - t0
+            timings["head_time"] = t2 - t1
+        return gaussians, s
 
     def train(self, mode: bool = True):
         super().train(mode)
