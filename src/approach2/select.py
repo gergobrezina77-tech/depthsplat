@@ -22,7 +22,9 @@ def gumbel_topk_mask(
     top = torch.topk(g, n_k, dim=1)
     m_hard = torch.zeros_like(g, dtype=torch.bool).scatter(1, top.indices, True)
     tau = top.values[:, -1:].detach()
-    p = 1 - torch.exp(-torch.exp((z - tau) / temperature))
+    # clamp avoids exp overflow (inf * 0 -> NaN grads); same value, expm1 form is stable
+    x = ((z - tau) / temperature).clamp(max=30)
+    p = -torch.expm1(-torch.exp(x))
     m = m_hard.float() + (p - p.detach())
     return m, m_hard
 

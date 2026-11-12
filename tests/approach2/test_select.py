@@ -51,3 +51,13 @@ def test_select_top_k_per_scene():
 
 def test_random_scores_seeded():
     assert torch.equal(random_scores(1, 50, 0, "cpu"), random_scores(1, 50, 0, "cpu"))
+
+
+@pytest.mark.parametrize("k", [1.0, 0.1])
+def test_gumbel_mask_outlier_score_finite_grad(k):
+    s = torch.randn(1, 1000)
+    s[0, 0] = 1000.0  # standardized outlier -> huge (z - tau) / T
+    s.requires_grad_(True)
+    m, _ = gumbel_topk_mask(s, k, 0.1)
+    (m * torch.randn(1, 1000)).sum().backward()
+    assert torch.isfinite(s.grad).all()
