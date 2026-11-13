@@ -37,3 +37,26 @@ def test_eval_budget_table(tmp_path):
     assert all(r["scenes"] == 5 for r in rows)
     assert len(json.loads((out / "metrics" / "per_scene.json").read_text())) == 20
     assert all(r["head_time"] > 0 and r["encode_time"] > 0 for r in rows)
+
+
+def test_eval_save_grids(tmp_path):
+    out = tmp_path / "eval"
+    subprocess.run(
+        [
+            "poetry", "run", "python", "-m", "src.approach2.evaluate",
+            "+experiment=re10k", "+approach2=re10k_small", "mode=test",
+            "dataset/view_sampler=evaluation",
+            f"dataset.view_sampler.index_path={ROOT / 'evaluation_index.json'}",
+            "dataset.view_sampler.num_context_views=2",
+            f"dataset.roots=[{ROOT}]",
+            "approach2.eval_budgets=[0.1,1.0]",
+            "approach2.eval_methods=[random,opacity]",
+            "approach2.save_grids=true",
+            f"output_dir={out}",
+        ],
+        check=True,
+        cwd=Path(__file__).parents[2],
+    )
+    grids = sorted((out / "grids").glob("*.png"))
+    scenes = json.loads((out / "metrics" / "budget_table.json").read_text())["scenes"]
+    assert {p.name.split("_t")[0] for p in grids} == set(scenes)

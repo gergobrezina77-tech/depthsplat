@@ -10,6 +10,7 @@ approach2:
   head_ckpt: null
   val_root: /mnt/hdd/depthsplat/datasets/re10k_heldout10
   val_index_path: assets/evaluation_index_a2_val10.json
+  save_grids: false
 
 model:
   encoder:

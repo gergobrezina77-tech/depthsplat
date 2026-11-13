@@ -6,6 +6,10 @@ from tabulate import tabulate
 
 from ..approach1.budget import budget_count
 from ..evaluation.metrics import compute_lpips, compute_psnr, compute_ssim
+from ..global_cfg import get_cfg
+from ..misc.image_io import save_image
+from ..visualization.annotation import add_label
+from ..visualization.layout import add_border, hcat, vcat
 from .select import random_scores, select_top_k
 
 
@@ -25,6 +29,7 @@ def budget_test_step(wrapper, batch) -> None:
         timings: dict = {}
         gaussians, s = wrapper.scores(batch, timings)
 
+        renders = {}
         b, g = s.shape
         method_scores = {
             "score": s,
@@ -46,6 +51,7 @@ def budget_test_step(wrapper, batch) -> None:
                 kept = kept_gaussians.opacities.shape[1]
                 assert kept == budget_count(g, k), (kept, g, k)
                 rgb = output.color[0]
+                renders[(method, k)] = rgb
                 wrapper.a2_rows.setdefault((method, k), []).append(
                     {
                         "scene": scene,
@@ -58,6 +64,25 @@ def budget_test_step(wrapper, batch) -> None:
                         "encode_time": timings["encode_time"],
                     }
                 )
+
+    if wrapper.a2_cfg.save_grids:
+        save_grids(rgb_gt, renders, scene, Path(get_cfg()["output_dir"]) / "grids")
+
+
+def save_grids(rgb_gt, renders: dict, scene: str, out_dir: Path) -> None:
+    # One PNG per target view: rows = methods, columns = GT then budgets, PSNR in each label.
+    methods = list(dict.fromkeys(m for m, _ in renders))
+    budgets = list(dict.fromkeys(k for _, k in renders))
+    for v in range(rgb_gt.shape[0]):
+        rows = []
+        for method in methods:
+            cells = [add_label(rgb_gt[v], f"{method}: GT")]
+            for k in budgets:
+                rgb = renders[(method, k)][v]
+                psnr = compute_psnr(rgb_gt[v : v + 1], rgb[None]).item()
+                cells.append(add_label(rgb, f"k={k}  {psnr:.2f} dB"))
+            rows.append(hcat(*cells))
+        save_image(add_border(vcat(*rows)), out_dir / f"{scene}_t{v}.png")
 
 
 def write_budget_tables(wrapper, out_dir: Path) -> list[dict]:

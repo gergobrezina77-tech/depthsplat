@@ -19,6 +19,7 @@ class Approach2Cfg:
     head_ckpt: str | None = None
     val_root: str = "/mnt/hdd/depthsplat/datasets/re10k_heldout10"
     val_index_path: str = "assets/evaluation_index_a2_val10.json"
+    save_grids: bool = False  # eval: write GT vs. method x budget image grids
 
 
 def load_approach2_cfg(cfg_dict: DictConfig) -> Approach2Cfg:
