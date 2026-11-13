@@ -14,7 +14,9 @@ def gumbel_topk_mask(
 ) -> tuple[Float[Tensor, "b g"], Bool[Tensor, "b g"]]:
     # Straight-through mask: forward value is the exact hard top-k, backward
     # uses the gradient of a soft keep-probability p.
-    z = (s - s.mean(1, keepdim=True).detach()) / s.std(1, keepdim=True).detach().clamp_min(1e-6)
+    # mean/std not detached: the loss ignores the score scale, so the gradient must too
+    # (a detached std let the scale grow without bound until it overflowed).
+    z = (s - s.mean(1, keepdim=True)) / s.std(1, keepdim=True).clamp_min(1e-6)
     u = torch.rand(s.shape, generator=generator, device=s.device, dtype=s.dtype)
     u = u.clamp(1e-10, 1 - 1e-10)
     g = z + temperature * -torch.log(-torch.log(u))

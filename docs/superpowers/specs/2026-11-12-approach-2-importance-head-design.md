@@ -34,7 +34,8 @@ specific variants come later (§6). Everything not stated here follows DepthSpla
 
 1. Encoder forward under `torch.no_grad()`, frozen modules in `eval()`; hook yields the head input.
 2. Head forward with grad -> score `s` per Gaussian. Standardize per scene: `z = (s - mean) / std`
-   (mean/std detached).
+   (mean/std not detached, so the gradient has no scale component; a detached std let the
+   score scale grow until fp32 overflow in the first overfit run).
 3. Sample `k ~ U[k_min, 1]`, `k_min = 0.01` (as Approach 1).
 4. Gumbel top-k: `g = z + T * Gumbel(0, 1)`, `m_hard` = top-`N_k` of `g` (exact budget).
    `tau` = detached `N_k`-th largest `g`, keep probability `p = 1 - exp(-exp((z - tau) / T))`,

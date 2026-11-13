@@ -61,3 +61,15 @@ def test_gumbel_mask_outlier_score_finite_grad(k):
     m, _ = gumbel_topk_mask(s, k, 0.1)
     (m * torch.randn(1, 1000)).sum().backward()
     assert torch.isfinite(s.grad).all()
+
+
+def test_gumbel_mask_grad_has_no_scale_or_shift_component():
+    # The mask depends only on the standardized z, so the gradient must not push the
+    # score scale or offset; with a detached std it did, and scores grew without bound.
+    s = (0.01 * torch.randn(2, 1000)).requires_grad_()
+    m, _ = gumbel_topk_mask(s, 0.3, 1.0, generator=torch.Generator().manual_seed(0))
+    (m * torch.randn(2, 1000, generator=torch.Generator().manual_seed(1))).sum().backward()
+    centered = (s - s.mean(1, keepdim=True)).detach()
+    radial = (s.grad * centered).sum(1) / (s.grad.norm(dim=1) * centered.norm(dim=1))
+    assert radial.abs().max() < 1e-4
+    assert (s.grad.sum(1).abs() / s.grad.norm(dim=1)).max() < 1e-4
