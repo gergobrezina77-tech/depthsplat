@@ -2,7 +2,7 @@
 
 # Approach 2 overfit run on the 5-scene RE10K subset (score head only, DepthSplat frozen).
 # Usage: scripts/a2_overfit.sh [output_dir] [extra Hydra overrides...]
-# batch_size 4 is a placeholder until the memory probe (Task 13).
+# batch_size 4: peak 6923 MiB, ~1.06 it/s on an RTX 2080 Ti (memory probe, Task 13).
 OUT=${1:-${OUT:-outputs/approach2/overfit5}}
 
 CUDA_VISIBLE_DEVICES=${GPU:-0} poetry run python -m src.approach2.train \
