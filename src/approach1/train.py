@@ -1,3 +1,4 @@
+import json
 import warnings
 from pathlib import Path
 
@@ -55,9 +56,17 @@ def train(cfg_dict: DictConfig) -> None:
         gradient_clip_val=cfg.trainer.gradient_clip_val,
         max_steps=cfg.trainer.max_steps,
         num_sanity_val_steps=cfg.trainer.num_sanity_val_steps,
+        precision=a1_cfg.precision,
     )
     # Resume (optimizer state included) from a Lightning checkpoint, as upstream.
     trainer.fit(wrapper, datamodule=data_module, ckpt_path=cfg.checkpointing.load)
+    peak = {
+        "precision": a1_cfg.precision,
+        "max_allocated_mib": torch.cuda.max_memory_allocated() / 2**20,
+        "max_reserved_mib": torch.cuda.max_memory_reserved() / 2**20,
+    }
+    print(f"Peak GPU memory: {peak}")
+    (output_dir / "peak_memory_train.json").write_text(json.dumps(peak, indent=2))
 
 
 if __name__ == "__main__":

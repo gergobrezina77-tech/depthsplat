@@ -10,6 +10,7 @@ from ..dataset.types import BatchedExample
 from ..evaluation.metrics import compute_lpips, compute_psnr, compute_ssim
 from ..global_cfg import get_cfg
 from ..misc.image_io import prep_image
+from ..model.types import Gaussians
 from ..model.model_wrapper import ModelWrapper
 from ..visualization.layout import add_border, hcat
 from .budget import budget_count, select_top_k_by_opacity
@@ -67,15 +68,22 @@ class ModelWrapperA1(ModelWrapper):
 
     def _render(self, gaussians, batch, depth_mode=None):
         _, _, _, h, w = batch["target"]["image"].shape
-        return self.decoder.forward(
-            gaussians,
-            batch["target"]["extrinsics"],
-            batch["target"]["intrinsics"],
-            batch["target"]["near"],
-            batch["target"]["far"],
-            (h, w),
-            depth_mode=depth_mode,
+
+        # The CUDA rasterizer only takes fp32: under fp16 autocast, render in fp32.
+        gaussians = Gaussians(
+            gaussians.means.float(), gaussians.covariances.float(),
+            gaussians.harmonics.float(), gaussians.opacities.float(),
         )
+        with torch.autocast("cuda", enabled=False):
+            return self.decoder.forward(
+                gaussians,
+                batch["target"]["extrinsics"],
+                batch["target"]["intrinsics"],
+                batch["target"]["near"],
+                batch["target"]["far"],
+                (h, w),
+                depth_mode=depth_mode,
+            )
 
     def _photo_loss(self, output, batch, gaussians):
         # Sum of upstream photometric losses (mse, lpips), as in upstream training_step.

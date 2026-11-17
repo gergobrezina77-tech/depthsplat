@@ -10,6 +10,7 @@ approach1:
   eval_budgets: [0.05, 0.1, 0.25, 0.5, 1.0]
   soft_mask: false
   soft_mask_temperature: 0.05
+  precision: 32-true  # 32-true | 16-mixed
 
 model:
   encoder:
