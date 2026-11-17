@@ -43,13 +43,13 @@ class ModelWrapperA2(ModelWrapperA1):
         )
         self.a2_cfg = a2_cfg
         self.last_refine = None
+        wrap_adapter_fp32(encoder.gaussian_adapter)  # fp32 adapter in both modes (spec 4/5.9)
         if a2_cfg.head_mode == "refine":
             self.score_head = ScoreHead(
                 channels=a2_cfg.head_channels, out_channels=38, zero_init_channels=37
             )
             self.depth_capture = DepthCapture(encoder.gaussian_regressor)
             self.refine_hook = RefineHook(encoder.gaussian_head, self.score_head, self.depth_capture)
-            wrap_adapter_fp32(encoder.gaussian_adapter)
             self.head_hook = None
         else:
             self.score_head = ScoreHead(channels=a2_cfg.head_channels)
@@ -60,7 +60,8 @@ class ModelWrapperA2(ModelWrapperA1):
         self.strict_loading = False  # head-only checkpoints lack the frozen DepthSplat keys
 
     def scores(self, batch, timings: dict | None = None):
-        # batch is already shimmed. DepthSplat runs without grad; only the head gets gradients.
+        # batch is already shimmed. Score mode: DepthSplat runs without grad, only the head gets gradients.
+        # Refine mode: the head is inside the forward, so gradients also flow through the adapter.
         # If `timings` is given, fills "encode_time" (encoder) and "head_time" (head only:
         # head input + score head + reordering), both CUDA-synchronized.
         def tick():

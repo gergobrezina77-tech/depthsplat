@@ -51,6 +51,11 @@ def test_only_head_trainable(built):
     assert names == {"score_head"}
 
 
+def test_adapter_fp32_wrapped_in_score_mode(built):
+    wrapper, _ = built
+    assert wrapper.encoder.gaussian_adapter.forward._fp32_wrapped
+
+
 def test_scores_shape_and_grad(built):
     wrapper, batch = built
     gaussians, s = wrapper.scores(batch)
