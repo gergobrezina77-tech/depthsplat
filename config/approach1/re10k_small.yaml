@@ -11,6 +11,7 @@ approach1:
   soft_mask: false
   soft_mask_temperature: 0.05
   precision: 32-true  # 32-true | 16-mixed
+  fp16_saved_activations: false
 
 model:
   encoder:

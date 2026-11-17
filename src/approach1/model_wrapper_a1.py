@@ -1,5 +1,6 @@
 import json
 import time
+import weakref
 from pathlib import Path
 
 import torch
@@ -106,6 +107,13 @@ class ModelWrapperA1(ModelWrapper):
         ).mean()
 
     def training_step(self, batch, batch_idx):
+        if not self.a1_cfg.fp16_saved_activations:
+            return self._training_step(batch)
+
+        with fp16_saved_tensors(self):
+            return self._training_step(batch)
+
+    def _training_step(self, batch):
         batch: BatchedExample = self.data_shim(batch)
         cfg = self.a1_cfg
         gaussians = self._encode(batch, scene_names=batch["scene"])
@@ -279,3 +287,29 @@ class ModelWrapperA1(ModelWrapper):
         )
         self.a1_rows.clear()
         self.a1_scenes.clear()
+
+
+def fp16_saved_tensors(model: torch.nn.Module):
+    """Context: float32 tensors that autograd keeps for backward are stored as fp16 and
+    converted back in backward. Weights, buffers and non-float tensors stay as they are."""
+    skip = {t.data_ptr() for t in [*model.parameters(), *model.buffers()]}
+
+    # One fp16 copy per tensor that several ops save; the weakref guards against a freed
+    # tensor's address being reused by a new one.
+    cache = {}
+
+    def pack(t):
+        if t.dtype != torch.float32 or t.data_ptr() in skip:
+            return (None, t)
+        key = (t.data_ptr(), t._version, t.shape, t.stride())
+        hit = cache.get(key)
+        if hit is None or hit[0]() is not t:
+            hit = (weakref.ref(t), t.half())
+            cache[key] = hit
+        return (t.dtype, hit[1])
+
+    def unpack(packed):
+        dtype, t = packed
+        return t if dtype is None else t.to(dtype)
+
+    return torch.autograd.graph.saved_tensors_hooks(pack, unpack)

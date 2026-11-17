@@ -23,6 +23,8 @@ class Approach1Cfg:
     soft_mask_temperature: float = 0.05
     # Lightning Trainer precision: "32-true" (default) or "16-mixed" (fp16 autocast + grad scaling).
     precision: str = "32-true"
+    # Store float32 tensors kept for backward as fp16 (converted back in backward).
+    fp16_saved_activations: bool = False
 
 
 def load_approach1_cfg(cfg_dict: DictConfig) -> Approach1Cfg:
