@@ -9,6 +9,7 @@ from ..approach1.model_wrapper_a1 import ModelWrapperA1
 from ..global_cfg import get_cfg
 from .config import Approach2Cfg
 from .features import HeadInputHook, build_head_input, scores_to_gaussian_order
+from .refine import DepthCapture, RefineHook, gaussians_fp32, wrap_adapter_fp32
 from .score_head import ScoreHead
 
 PREFIX = "score_head."
@@ -41,8 +42,18 @@ class ModelWrapperA2(ModelWrapperA1):
             eval_data_cfg=eval_data_cfg,
         )
         self.a2_cfg = a2_cfg
-        self.score_head = ScoreHead(channels=a2_cfg.head_channels)
-        self.head_hook = HeadInputHook(encoder.gaussian_head)
+        self.last_refine = None
+        if a2_cfg.head_mode == "refine":
+            self.score_head = ScoreHead(
+                channels=a2_cfg.head_channels, out_channels=38, zero_init_channels=37
+            )
+            self.depth_capture = DepthCapture(encoder.gaussian_regressor)
+            self.refine_hook = RefineHook(encoder.gaussian_head, self.score_head, self.depth_capture)
+            wrap_adapter_fp32(encoder.gaussian_adapter)
+            self.head_hook = None
+        else:
+            self.score_head = ScoreHead(channels=a2_cfg.head_channels)
+            self.head_hook = HeadInputHook(encoder.gaussian_head)
         self.a2_rows: dict = {}
         self.a2_scenes: set[str] = set()
         self.a2_warm = False
@@ -57,6 +68,8 @@ class ModelWrapperA2(ModelWrapperA1):
                 torch.cuda.synchronize()
             return time.time()
 
+        if self.a2_cfg.head_mode == "refine":
+            return self._scores_refine(batch, timings, tick)
         with torch.no_grad():
             t0 = tick()
             out = self.encoder(
@@ -74,6 +87,44 @@ class ModelWrapperA2(ModelWrapperA1):
             timings["head_time"] = t2 - t1
         return gaussians, s
 
+    def _scores_refine(self, batch, timings, tick):
+        # No torch.no_grad(): the caller's grad mode decides. The backbone is frozen, so autograd
+        # only records from the refine hook on.
+        self.refine_hook.sync_time = timings is not None
+        t0 = tick()
+        out = self.encoder(
+            batch["context"], self.global_step, False, scene_names=batch.get("scene")
+        )
+        gaussians = out["gaussians"]
+        t1 = tick()
+        raw, delta, score = self.refine_hook.pop()
+        self.last_refine = (raw.detach(), delta.detach())
+        b, v = out["depths"].shape[:2]
+        s = scores_to_gaussian_order(score, b, v)
+        if timings is not None:
+            t2 = tick()
+            hook_time = self.refine_hook.last_time
+            timings["encode_time"] = (t1 - t0) - hook_time
+            timings["head_time"] = hook_time + (t2 - t1)
+        return gaussians, s
+
+    @torch.no_grad()
+    def frozen_gaussians(self, batch):
+        # Same encoder call as scores(), no grad. In refine mode the head is bypassed.
+        refine = self.a2_cfg.head_mode == "refine"
+        if refine:
+            self.refine_hook.enabled = False
+        try:
+            out = self.encoder(
+                batch["context"], self.global_step, False, scene_names=batch.get("scene")
+            )
+        finally:
+            if refine:
+                self.refine_hook.enabled = True
+        if not refine:
+            self.head_hook.pop()
+        return out["gaussians"]
+
     def train(self, mode: bool = True):
         super().train(mode)
         set_frozen_eval(self, [PREFIX])
@@ -83,6 +134,7 @@ class ModelWrapperA2(ModelWrapperA1):
         checkpoint["state_dict"] = {
             k: v for k, v in checkpoint["state_dict"].items() if k.startswith(PREFIX)
         }
+        checkpoint["a2_head_mode"] = self.a2_cfg.head_mode
 
     def on_validation_epoch_start(self) -> None:
         self.a2_val_image_done = False
@@ -106,3 +158,8 @@ class ModelWrapperA2(ModelWrapperA1):
         from .evaluation import write_budget_tables
 
         write_budget_tables(self, Path(get_cfg()["output_dir"]) / "metrics")
+
+    def _render(self, gaussians, batch, depth_mode=None):
+        # The rasterizers and the stock decoder break under autocast: always render in fp32.
+        with torch.autocast("cuda", enabled=False):
+            return super()._render(gaussians_fp32(gaussians), batch, depth_mode)

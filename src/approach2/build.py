@@ -12,6 +12,16 @@ from .config import Approach2Cfg, load_approach2_cfg
 from .model_wrapper_a2 import PREFIX, ModelWrapperA2
 
 
+def check_head_mode(ckpt: dict, head_mode: str, path: str) -> None:
+    # Checkpoints written before refine mode have no "a2_head_mode" key and are score-mode.
+    ckpt_mode = ckpt.get("a2_head_mode", "score")
+    if ckpt_mode != head_mode:
+        raise ValueError(
+            f"Head checkpoint {path} was trained in head_mode={ckpt_mode!r}, "
+            f"but head_mode={head_mode!r} was requested"
+        )
+
+
 def build_wrapper_a2(
     cfg_dict: DictConfig,
 ) -> tuple[ModelWrapperA2, DataModule, RootCfg, Approach2Cfg]:
@@ -52,7 +62,9 @@ def build_wrapper_a2(
     print(f"Loaded pretrained weights: {cfg.checkpointing.pretrained_model}")
 
     if a2_cfg.head_ckpt is not None:
-        head_state = torch.load(a2_cfg.head_ckpt, map_location="cpu")["state_dict"]
+        head_ckpt = torch.load(a2_cfg.head_ckpt, map_location="cpu")
+        check_head_mode(head_ckpt, a2_cfg.head_mode, str(a2_cfg.head_ckpt))
+        head_state = head_ckpt["state_dict"]
         head_state = {
             k[len(PREFIX):]: v for k, v in head_state.items() if k.startswith(PREFIX)
         }
