@@ -52,12 +52,15 @@ Terms used below:
 ### G0: tests and fp16 sanity
 
 72 tests passed, all values finite. On heldout10, frozen DepthSplat at k = 1 in fp16 is 25.628 dB
-vs. fp32 25.687 dB (diff -0.059 dB, limit 0.1). fp16 `refine` and `random` at k = 0.05 differ from
-fp32 `random` by 0.002 dB. **G0: PASS.**
+vs. fp32 25.687 dB (diff -0.059 dB, limit 0.1). fp16 `refine_random` at k = 0.05 (6.922 dB) differs from
+fp32-reference `random` by 0.002 dB; zero-init `refine@0.05` is 6.255 dB (constant score), 0.67 dB
+below. **G0: PASS.**
 
-Precision note: the frozen full-set baseline differs slightly between score-mode evals (fp16
-adapter) and refine-mode evals (fp32 adapter), e.g. 30.25 vs 30.29 dB in the 1-scene scene.
-Gates therefore compare within matched runs.
+Precision note: the earlier v1 fp16 numbers were produced with an fp16 Gaussian adapter in score
+mode (only refine mode wrapped it in fp32). That was fixed (the adapter runs in fp32 in both modes)
+and the three v1 fp16 evals were re-run. The v1 table rows are the new numbers, and the v1 frozen
+`random@1.0` now equals the refine runs' (30.289 on the 1-scene scene, 25.628 on heldout10), so
+all methods in a comparison use the same precision.
 
 ## G1: 1 scene (training scene `41b80c5fb43019e5`)
 
@@ -67,15 +70,16 @@ PSNR / SSIM / LPIPS, 3 target views.
 |---|---|---|---|---|---|---|
 | 0.05 | 6553 | **22.88** / .772 / .324 | 8.44 / .145 / .697 | 4.69 / .058 / .728 | 5.44 / .062 / .794 | 11.40 / .459 / .543 |
 | 0.1 | 13107 | **25.66** / .842 / .228 | 13.06 / .361 / .578 | 5.35 / .114 / .699 | 7.68 / .151 / .748 | 13.43 / .558 / .470 |
-| 0.25 | 32768 | **29.63** / .911 / .139 | 22.16 / .765 / .281 | 12.41 / .543 / .519 | 12.26 / .363 / .612 | 19.63 / .764 / .318 |
-| 0.5 | 65536 | **30.14** / .920 / .112 | 29.11 / .911 / .125 | 22.95 / .800 / .269 | 19.08 / .640 / .415 | 27.94 / .919 / .132 |
-| 1.0 | 131072 | 29.83 / .917 / .110 | 29.83 / .917 / .110 | 29.83 / .917 / .110 | 30.29 / .948 / .080 | 30.25 / .947 / .080 |
+| 0.25 | 32768 | **29.63** / .911 / .139 | 22.16 / .765 / .281 | 12.41 / .543 / .519 | 12.26 / .363 / .612 | 19.64 / .765 / .318 |
+| 0.5 | 65536 | **30.14** / .920 / .112 | 29.11 / .911 / .125 | 22.95 / .800 / .269 | 19.08 / .640 / .415 | 27.97 / .920 / .131 |
+| 1.0 | 131072 | 29.83 / .917 / .110 | 29.83 / .917 / .110 | 29.83 / .917 / .110 | 30.29 / .948 / .080 | 30.29 / .948 / .080 |
 
-Gate G1 (refine > v1 score, fp16): +11.48 / +12.23 / +10.00 dB at k = 0.05 / 0.1 / 0.25.
-**G1: PASS.** (v1 fp16 matches its fp32 reference 11.43 / 13.45 / 19.67 / 28.00 within 0.05 dB.)
+Gate G1 (refine > v1 score, fp16): +11.48 / +12.23 / +9.99 dB at k = 0.05 / 0.1 / 0.25.
+**G1: PASS.** (v1 fp16 is 0.016-0.035 dB below its fp32 reference 11.43 / 13.45 / 19.67 / 28.00 / 30.32 at k = 0.05 / 0.1 / 0.25 / 0.5 / 1.0; max difference 0.035 dB at k = 0.5.)
 
 Here the ranking matters a lot: `refine` is +14.4 / +12.6 dB above `refine_random` at k = 0.05 / 0.1.
 The k = 1 cost is small: 29.83 vs 30.29 dB (-0.46 dB).
+Also `refine@0.5` (30.14) is above `refine@1.0` (29.83).
 
 ## G2: 5 scenes, evaluated on 10 unseen scenes (heldout10)
 
@@ -85,9 +89,9 @@ PSNR / SSIM / LPIPS, mean over 10 scenes.
 |---|---|---|---|---|---|---|
 | 0.05 | 6553 | **14.19** / .501 / .449 | 10.97 / .238 / .594 | 6.52 / .082 / .689 | 6.92 / .082 / .709 | 10.78 / .350 / .561 |
 | 0.1 | 13107 | **16.86** / .586 / .375 | 14.82 / .453 / .489 | 7.34 / .152 / .656 | 8.51 / .146 / .680 | 12.26 / .417 / .515 |
-| 0.25 | 32768 | **20.98** / .740 / .247 | 21.30 / .739 / .275 | 10.30 / .361 / .532 | 12.92 / .329 / .585 | 15.90 / .577 / .383 |
-| 0.5 | 65536 | 23.21 / .797 / .188 | 23.57 / .808 / .183 | 16.22 / .640 / .333 | 19.10 / .588 / .419 | 20.52 / .747 / .238 |
-| 1.0 | 131072 | 23.16 / .806 / .171 | 23.16 / .806 / .171 | 23.16 / .806 / .171 | 25.63 / .854 / .122 | 25.63 / .854 / .123 |
+| 0.25 | 32768 | **20.98** / .740 / .247 | 21.30 / .739 / .275 | 10.30 / .361 / .532 | 12.92 / .329 / .585 | 15.90 / .577 / .382 |
+| 0.5 | 65536 | 23.21 / .797 / .188 | 23.57 / .808 / .183 | 16.22 / .640 / .333 | 19.10 / .588 / .419 | 20.53 / .748 / .236 |
+| 1.0 | 131072 | 23.16 / .806 / .171 | 23.16 / .806 / .171 | 23.16 / .806 / .171 | 25.63 / .854 / .122 | 25.63 / .854 / .122 |
 
 Gate G2 (heldout10, refine > v1 score and > frozen random at k = 0.05 / 0.1 / 0.25): **PASS**.
 
@@ -98,15 +102,15 @@ Gate G2 (heldout10, refine > v1 score and > frozen random at k = 0.05 / 0.1 / 0.
 | 0.25 | 20.98 | 15.90 | 12.92 | +5.08 | +8.06 |
 
 On the 5 training scenes (overfit5): refine 13.50 / 16.82 / 23.76 / 26.30 / 26.43 dB at k = 0.05 /
-0.1 / 0.25 / 0.5 / 1.0, v1 score 10.25 / 12.13 / 16.41 / 23.84 / 29.68, frozen random
-6.33 / 8.07 / 12.57 / 19.45 / 29.71.
+0.1 / 0.25 / 0.5 / 1.0, v1 score 10.25 / 12.13 / 16.41 / 23.86 / 29.71, frozen random
+6.33 / 8.07 / 12.57 / 19.45 / 29.71. There `refine_random@0.5` (26.53) is above `refine@0.5` (26.30).
 
 ## Findings
 
 ### 1. Ranking vs. Gaussians (`refine` vs. `refine_random`)
 
 In the 1-scene run the learned score adds a lot on top of the corrected Gaussians (+14.4 dB at
-k = 0.05, +6.6 dB at 0.25). On heldout10 the advantage shrinks to +3.2 / +2.0 dB at k = 0.05 / 0.1
+k = 0.05, +7.5 dB at 0.25 (29.63 vs 22.16)). On heldout10 the advantage shrinks to +3.2 / +2.0 dB at k = 0.05 / 0.1
 (14.19 vs 10.97, 16.86 vs 14.82) and vanishes at k >= 0.25: `refine_random` is 21.30 vs `refine`
 20.98 dB at k = 0.25 and 23.57 vs 23.21 dB at k = 0.5. So most of the heldout gain over v1 at
 k >= 0.25 comes from the corrected Gaussians, not from the selection. The score is still useful at
@@ -117,7 +121,8 @@ the smallest budgets.
 One correction has to serve all budgets, so the full set is worse than frozen DepthSplat: -2.47 dB
 on heldout10 (23.16 vs 25.63), about -3.3 dB on the 5 training scenes (26.43 vs 29.71), but only
 -0.46 dB in the 1-scene run. `val/psnr_full_minus_frozen` at step 2999 is -2.47 in the 5-scene run.
-This is the budget-independent compromise risk (spec section 10). The spec names budget conditioning
+This is the budget-independent compromise risk (spec section 10). Direct evidence: `refine@0.5`
+is not below `refine@1.0` (1 scene 30.14 vs 29.83; heldout10 23.21 vs 23.16). The spec names budget conditioning
 (`k` as head input) as the first ablation.
 
 ### 3. Gaussians grow
@@ -155,6 +160,10 @@ needed (as in v1, where opacity also lost).
 | 2999 | 7.27 | 8.35 | 8.06 | 4.11 | -2.47 |
 
 The gap to frozen random at k = 1.0 appears within the first 250 steps and does not close.
+
+The curve is noisy and the last checkpoint is not the best one: in the 5-scene run
+`val/psnr_minus_random@0.05` / `@0.1` peak at step 2249 (8.30 / 9.24 dB) vs. 7.27 / 8.35 at the
+final step 2999.
 
 ## Cost
 
