@@ -10,8 +10,9 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
 
 
-def test_train_smoke(tmp_path):
-    out = tmp_path / "train"
+@pytest.fixture(scope="module")
+def score_ckpt(tmp_path_factory):
+    out = tmp_path_factory.mktemp("score") / "train"
     subprocess.run(
         [
             "scripts/a2_overfit.sh", str(out),
@@ -23,8 +24,30 @@ def test_train_smoke(tmp_path):
         check=True,
         cwd=Path(__file__).parents[2],
     )
-    assert list((out / "checkpoints").glob("*.ckpt"))
-    assert list((out / "tensorboard").rglob("events.out.tfevents.*"))
+    return out
+
+
+def test_train_smoke(score_ckpt):
+    assert list((score_ckpt / "checkpoints").glob("*.ckpt"))
+    assert list((score_ckpt / "tensorboard").rglob("events.out.tfevents.*"))
+
+
+def test_resume_mode_mismatch_fails(score_ckpt, tmp_path):
+    ckpt = next((score_ckpt / "checkpoints").glob("*.ckpt"))
+    proc = subprocess.run(
+        [
+            "scripts/a2_overfit.sh", str(tmp_path / "train"),
+            "trainer.max_steps=4",
+            "data_loader.train.batch_size=1",
+            "approach2.head_mode=refine",
+            f"checkpointing.load={ckpt}",
+        ],
+        cwd=Path(__file__).parents[2],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode != 0
+    assert "head_mode='score'" in proc.stderr and "head_mode='refine' was requested" in proc.stderr
 
 
 def test_train_smoke_refine_fp16(tmp_path):
@@ -44,7 +67,7 @@ def test_train_smoke_refine_fp16(tmp_path):
     )
     ckpts = list((out / "checkpoints").glob("*.ckpt"))
     assert ckpts
-    assert torch.load(ckpts[0], map_location="cpu")["a2_head_mode"] == "refine"
+    assert torch.load(ckpts[0], map_location="cpu", weights_only=True)["a2_head_mode"] == "refine"
     acc = EventAccumulator(str(out / "tensorboard"))
     acc.Reload()
     for tag in ("train/amp_scale", "refine/scale_ratio/p50"):
