@@ -29,3 +29,18 @@ def test_yaml_composes():
     assert cfg_dict.model.encoder.supervise_intermediate_depth is False
     assert cfg_dict.model.encoder.return_depth is True
     assert load_approach2_cfg(cfg_dict).eval_budgets == [0.05, 0.1, 0.25, 0.5, 1.0]
+
+
+def test_new_keys_defaults():
+    cfg = load_approach2_cfg(OmegaConf.create({}))
+    assert cfg.head_mode == "score" and cfg.precision == "32"
+
+
+def test_precision_int_coerced():
+    assert load_approach2_cfg(OmegaConf.create({"approach2": {"precision": 32}})).precision == "32"
+
+
+@pytest.mark.parametrize("key,value", [("head_mode", "merge"), ("precision", "16")])
+def test_rejects_unknown_values(key, value):
+    with pytest.raises(ValueError):
+        load_approach2_cfg(OmegaConf.create({"approach2": {key: value}}))

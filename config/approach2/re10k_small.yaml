@@ -11,6 +11,8 @@ approach2:
   val_root: /mnt/hdd/depthsplat/datasets/re10k_heldout10
   val_index_path: assets/evaluation_index_a2_val10.json
   save_grids: false
+  head_mode: score
+  precision: "32"
 
 model:
   encoder:

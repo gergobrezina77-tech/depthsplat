@@ -12,9 +12,15 @@ def _double_conv(c_in: int, c_out: int) -> nn.Sequential:
 
 
 class ScoreHead(nn.Module):
-    """Small U-Net: per-pixel features [n, c, h, w] -> score logits [n, 1, h, w]."""
+    """Small U-Net: per-pixel features [n, c, h, w] -> [n, out_channels, h, w] (score logits by default)."""
 
-    def __init__(self, in_channels: int = 38, channels: list[int] = [32, 64, 96, 128]):
+    def __init__(
+        self,
+        in_channels: int = 38,
+        channels: list[int] = [32, 64, 96, 128],
+        out_channels: int = 1,
+        zero_init_channels: int = 0,
+    ):
         super().__init__()
         self.num_levels = len(channels)
         self.divisor = 2 ** (self.num_levels - 1)
@@ -34,7 +40,11 @@ class ScoreHead(nn.Module):
             _double_conv(channels[i + 1] + channels[i], channels[i])
             for i in range(self.num_levels - 1)
         )
-        self.out = nn.Conv2d(channels[0], 1, 1)
+        self.out = nn.Conv2d(channels[0], out_channels, 1)
+        # First output rows start at exactly zero (residual channels).
+        with torch.no_grad():
+            self.out.weight[:zero_init_channels].zero_()
+            self.out.bias[:zero_init_channels].zero_()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h, w = x.shape[-2:]

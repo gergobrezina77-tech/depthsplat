@@ -75,6 +75,18 @@ def test_mask_grad_reaches_masked_gaussians():
     assert (p.grad[0, :100].abs() > 0).any()
 
 
+def test_mask_param_grads():
+    means, cov, sh, opa = _scene(d_sh=9)
+    params = [t.clone().requires_grad_() for t in (means, cov, sh, opa)]
+    masks = torch.zeros(1, G, device=DEV)
+    masks[0, :250] = 1
+    _render(render_cuda_masked, *params, gaussian_masks=masks).sum().backward()
+    for name, t in zip(("means", "cov", "sh", "opa"), params):
+        assert torch.isfinite(t.grad).all(), name
+        assert (t.grad[:250] != 0).any(), name
+        assert (t.grad[250:] == 0).all(), name
+
+
 def test_mask_none_raises():
     means, cov, sh, opa = _scene()
     with pytest.raises(ValueError):
