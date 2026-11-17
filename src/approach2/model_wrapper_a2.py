@@ -136,6 +136,12 @@ class ModelWrapperA2(ModelWrapperA1):
         }
         checkpoint["a2_head_mode"] = self.a2_cfg.head_mode
 
+    def on_before_optimizer_step(self, optimizer) -> None:
+        super().on_before_optimizer_step(optimizer)
+        scaler = getattr(self.trainer.precision_plugin, "scaler", None)
+        if scaler is not None:  # only under 16-mixed
+            self.log("train/amp_scale", scaler.get_scale())
+
     def on_validation_epoch_start(self) -> None:
         self.a2_val_image_done = False
 

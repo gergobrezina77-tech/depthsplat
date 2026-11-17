@@ -1,8 +1,11 @@
+import json
+import math
 import subprocess
 from pathlib import Path
 
 import pytest
 import torch
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
 
@@ -22,3 +25,30 @@ def test_train_smoke(tmp_path):
     )
     assert list((out / "checkpoints").glob("*.ckpt"))
     assert list((out / "tensorboard").rglob("events.out.tfevents.*"))
+
+
+def test_train_smoke_refine_fp16(tmp_path):
+    out = tmp_path / "train"
+    subprocess.run(
+        [
+            "scripts/a2_overfit.sh", str(out),
+            "trainer.max_steps=10",  # train.py logs every 10 steps; fewer logs no train scalars
+            "trainer.val_check_interval=5",
+            "checkpointing.every_n_train_steps=10",
+            "data_loader.train.batch_size=1",
+            "approach2.head_mode=refine",
+            "approach2.precision=16-mixed",
+        ],
+        check=True,
+        cwd=Path(__file__).parents[2],
+    )
+    ckpts = list((out / "checkpoints").glob("*.ckpt"))
+    assert ckpts
+    assert torch.load(ckpts[0], map_location="cpu")["a2_head_mode"] == "refine"
+    acc = EventAccumulator(str(out / "tensorboard"))
+    acc.Reload()
+    for tag in ("train/amp_scale", "refine/scale_ratio/p50"):
+        values = [e.value for e in acc.Scalars(tag)]
+        assert values and all(math.isfinite(v) for v in values), tag
+    peak = json.loads((out / "peak_memory_train.json").read_text())
+    assert peak["max_memory_allocated"] > 0 and peak["max_memory_reserved"] > 0

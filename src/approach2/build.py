@@ -1,7 +1,6 @@
 import torch
 from omegaconf import DictConfig
 from pytorch_lightning.plugins.precision import MixedPrecision
-from torch.cuda.amp import GradScaler
 
 from ..approach1.freeze import freeze_all_but
 from ..config import RootCfg, load_typed_root_config
@@ -28,7 +27,7 @@ def trainer_precision_kwargs(precision: str) -> dict:
     # Extra Trainer kwargs for approach2.precision; fp16 gets a small initial loss scale.
     if precision == "32":
         return {}
-    return {"plugins": [MixedPrecision("16-mixed", "cuda", GradScaler(init_scale=2**10))]}
+    return {"plugins": [MixedPrecision("16-mixed", "cuda", torch.amp.GradScaler("cuda", init_scale=2**10))]}
 
 
 def build_wrapper_a2(

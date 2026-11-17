@@ -1,3 +1,4 @@
+import json
 import warnings
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 from ..approach1.tb_logger import TensorBoardImageLogger
 from ..global_cfg import set_cfg
-from .build import build_wrapper_a2
+from .build import build_wrapper_a2, check_head_mode, trainer_precision_kwargs
 from .val_data import build_val_loader
 
 
@@ -54,8 +55,12 @@ def train(cfg_dict: DictConfig) -> None:
         gradient_clip_val=cfg.trainer.gradient_clip_val,
         max_steps=cfg.trainer.max_steps,
         num_sanity_val_steps=cfg.trainer.num_sanity_val_steps,
+        **trainer_precision_kwargs(a2_cfg.precision),
     )
     val_loader = build_val_loader(cfg_dict, a2_cfg.val_root, a2_cfg.val_index_path)
+    if cfg.checkpointing.load is not None:
+        resume = torch.load(cfg.checkpointing.load, map_location="cpu")
+        check_head_mode(resume, a2_cfg.head_mode, str(cfg.checkpointing.load))
     # Resume (optimizer state included) from a Lightning checkpoint, as upstream.
     trainer.fit(
         wrapper,
@@ -63,6 +68,11 @@ def train(cfg_dict: DictConfig) -> None:
         val_dataloaders=val_loader,
         ckpt_path=cfg.checkpointing.load,
     )
+    # Per-process peak (not nvidia-smi) is the memory measure.
+    (output_dir / "peak_memory_train.json").write_text(json.dumps({
+        "max_memory_allocated": torch.cuda.max_memory_allocated(),
+        "max_memory_reserved": torch.cuda.max_memory_reserved(),
+    }))
 
 
 if __name__ == "__main__":
