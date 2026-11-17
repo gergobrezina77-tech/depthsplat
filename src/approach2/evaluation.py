@@ -10,6 +10,7 @@ from ..global_cfg import get_cfg
 from ..misc.image_io import save_image
 from ..visualization.annotation import add_label
 from ..visualization.layout import add_border, hcat, vcat
+from .refine import gaussians_fp32
 from .select import random_scores, select_top_k
 
 
@@ -31,39 +32,55 @@ def budget_test_step(wrapper, batch) -> None:
 
         renders = {}
         b, g = s.shape
-        method_scores = {
-            "score": s,
-            "random": random_scores(b, g, 0, s.device),
-            "opacity": gaussians.opacities,
-        }
-        for method in wrapper.a2_cfg.eval_methods:
-            for k in wrapper.a2_cfg.eval_budgets:
-                kept_gaussians = select_top_k(gaussians, method_scores[method], k)
-                output = wrapper.decoder.forward(
-                    kept_gaussians,
-                    batch["target"]["extrinsics"],
-                    batch["target"]["intrinsics"],
-                    batch["target"]["near"],
-                    batch["target"]["far"],
-                    (h, w),
-                    depth_mode=None,
-                )
-                kept = kept_gaussians.opacities.shape[1]
-                assert kept == budget_count(g, k), (kept, g, k)
-                rgb = output.color[0]
-                renders[(method, k)] = rgb
-                wrapper.a2_rows.setdefault((method, k), []).append(
-                    {
-                        "scene": scene,
-                        "psnr": compute_psnr(rgb_gt, rgb).mean().item(),
-                        "ssim": compute_ssim(rgb_gt, rgb).mean().item(),
-                        "lpips": compute_lpips(rgb_gt, rgb).mean().item(),
-                        "kept": kept,
-                        "n_total": g,
-                        "head_time": timings["head_time"],
-                        "encode_time": timings["encode_time"],
-                    }
-                )
+        methods = wrapper.a2_cfg.eval_methods
+        # method -> (Gaussians, scores). refine mode: the learned-head methods use the corrected
+        # Gaussians, random/opacity the frozen ones (built once per scene, only if requested).
+        method_inputs = {}
+        if wrapper.a2_cfg.head_mode == "refine":
+            method_inputs["refine"] = (gaussians, s)
+            method_inputs["refine_random"] = (gaussians, random_scores(b, g, 0, s.device))
+            method_inputs["refine_opacity"] = (gaussians, gaussians.opacities)
+            if "random" in methods or "opacity" in methods:
+                frozen = wrapper.frozen_gaussians(batch)
+                method_inputs["random"] = (frozen, random_scores(b, g, 0, s.device))
+                method_inputs["opacity"] = (frozen, frozen.opacities)
+        else:
+            method_inputs["score"] = (gaussians, s)
+            method_inputs["random"] = (gaussians, random_scores(b, g, 0, s.device))
+            method_inputs["opacity"] = (gaussians, gaussians.opacities)
+        # Selection, rendering and metrics run in fp32 (autocast reaches the rasterizer otherwise).
+        with torch.autocast("cuda", enabled=False):
+            for method in methods:
+                method_gaussians, method_scores = method_inputs[method]
+                method_gaussians = gaussians_fp32(method_gaussians)
+                method_scores = method_scores.float()
+                for k in wrapper.a2_cfg.eval_budgets:
+                    kept_gaussians = select_top_k(method_gaussians, method_scores, k)
+                    output = wrapper.decoder.forward(
+                        kept_gaussians,
+                        batch["target"]["extrinsics"],
+                        batch["target"]["intrinsics"],
+                        batch["target"]["near"],
+                        batch["target"]["far"],
+                        (h, w),
+                        depth_mode=None,
+                    )
+                    kept = kept_gaussians.opacities.shape[1]
+                    assert kept == budget_count(g, k), (kept, g, k)
+                    rgb = output.color[0]
+                    renders[(method, k)] = rgb
+                    wrapper.a2_rows.setdefault((method, k), []).append(
+                        {
+                            "scene": scene,
+                            "psnr": compute_psnr(rgb_gt, rgb).mean().item(),
+                            "ssim": compute_ssim(rgb_gt, rgb).mean().item(),
+                            "lpips": compute_lpips(rgb_gt, rgb).mean().item(),
+                            "kept": kept,
+                            "n_total": g,
+                            "head_time": timings["head_time"],
+                            "encode_time": timings["encode_time"],
+                        }
+                    )
 
     if wrapper.a2_cfg.save_grids:
         save_grids(rgb_gt, renders, scene, Path(get_cfg()["output_dir"]) / "grids")
