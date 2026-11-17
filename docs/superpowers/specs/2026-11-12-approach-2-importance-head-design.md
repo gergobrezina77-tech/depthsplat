@@ -1,6 +1,7 @@
 # Approach 2: Learned Importance Head (Design, Basic Version)
 
-Status: design, awaiting approval (2026-11-12). Branch: `approach2-importance-head` (from
+Status: superseded by [the refine-head design](2026-11-17-approach-2-refine-head-design.md)
+(2026-11-17); implemented and evaluated as A2 v1. Originally: design, awaiting approval (2026-11-12). Branch: `approach2-importance-head` (from
 `approach1-opacity-finetune`). Nothing below is implemented.
 
 ## 1. Idea
