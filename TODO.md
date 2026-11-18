@@ -1,0 +1,10 @@
+- Own data: Felix room video
+- Testing concrete object reconstruction, 4 view
+- New training with more views per sample
+    - More variance in views
+- Understanding training env
+- Rendering time comparison
+- GPU opt. -> batch size increaase
+           -> gradient accumulation
+- Setting up WandB
+- Main goal? -> 3D object/ reconstruction//video
